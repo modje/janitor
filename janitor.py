@@ -1,21 +1,24 @@
 #!flask/bin/python
 import sys, os
 import json
+import base64
 from tinydb import TinyDB, Query
 from flask import Flask
 from flask import request
+from flask import Response
 
 
 ##### Configuration #####
-# TODO : absolute path
-with open('conf.json') as f:
+with open(os.path.join(os.path.dirname(sys.argv[0]), "conf.json")) as f:
     conf = json.load(f)
 
-if not conf["server"]["bind"]:
-    conf["server"]["bind"] = "0.0.0.0"
-if not conf["server"]["port"]:
-    conf["server"]["port"] = 5000
-
+#if not conf["server"]["bind"]:
+#    conf["server"]["bind"] = "0.0.0.0"
+#if not conf["server"]["port"]:
+#    conf["server"]["port"] = 5000
+#if not conf["server"]["password"]:
+#    print("Missing key in configuration : server/password")
+#    sys.exit(1)
 
 
 
@@ -32,7 +35,7 @@ app = Flask(__name__)
 @app.route('/home/<room>/temperature', methods=['GET'])
 def get_temperature(room):
     history = request.args.get("history")
-    if history is None:
+    if not history:
         # TODO get lastvalue of temperature for the room
         return "get %s temp" % room
     else:
@@ -48,8 +51,27 @@ def get_room(room):
 
 @app.route('/home/<room>/temperature', methods=['POST'])
 def set_temperature(room):
-    # TODO
-    return 0
+    if request.is_json:
+        content = request.get_json()
+        if content['value']:
+            auth = request.headers.get('Authorization')
+            if auth:
+                try:
+                    auth = base64.b64decode(auth).decode("utf-8")
+                except:
+                    return Response('{"response": "impossible to decode the authorization string", "code": 12}', status=401, mimetype='application/json')
+                if auth.strip() == conf["server"]["password"]:
+                    # TODO process the request
+                    return '{"response": "OK", "code": 0}'
+                else:
+                    return Response('{"response": "wrong value for authorization string", "code": 13}', status=401, mimetype='application/json')
+            else:
+                return Response('{"response": "missing authorization header", "code": 11}', status=401, mimetype='application/json')
+        # TODO fix content errors
+        else:
+            return Response('{"response": "missing key in content : value", "code": 2}', status=500, mimetype='application/json')
+    else:
+        return Response('{"response": "content is not json formated", "code": 1}', status=500, mimetype='application/json')
 
 
 
